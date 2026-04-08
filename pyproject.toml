@@ -1,5 +1,5 @@
 [project]
-name = "vector-board"
+name = "botstash"
 version = "0.1.0"
 description = "CLI tool and WebUI that ingests LMS course exports and Echo360 transcripts into an AnythingLLM workspace for embedded course chatbots."
 readme = "README.md"
@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 authors = [
     { name = "Michael", email = "michael@example.com" },
 ]
-keywords = ["lms", "chatbot", "anythingllm", "vectorboard", "education"]
+keywords = ["lms", "chatbot", "anythingllm", "botstash", "education", "rag"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Education",
@@ -33,19 +33,19 @@ dependencies = [
 ]
 
 [project.scripts]
-vectorboard = "vectorboard.cli:cli"
+botstash = "botstash.cli:cli"
 
 [project.urls]
-Homepage = "https://github.com/michaelborck/vector-board"
-Repository = "https://github.com/michaelborck/vector-board"
-Issues = "https://github.com/michaelborck/vector-board/issues"
+Homepage = "https://github.com/michael-borck/botstash"
+Repository = "https://github.com/michael-borck/botstash"
+Issues = "https://github.com/michael-borck/botstash/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vectorboard"]
+packages = ["src/botstash"]
 
 [tool.ruff]
 target-version = "py311"
@@ -70,4 +70,5 @@ dev = [
     "mypy>=1.20.0",
     "pytest>=9.0.3",
     "ruff>=0.15.9",
+    "twine>=6.2.0",
 ]

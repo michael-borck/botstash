@@ -1,6 +1,6 @@
 """Basic smoke tests."""
 
-from vectorboard import __version__
+from botstash import __version__
 
 
 def test_version() -> None:

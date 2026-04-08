@@ -1,4 +1,4 @@
-# VectorBoard
+# BotStash
 
 A CLI tool and lightweight WebUI that ingests LMS course exports (Blackboard IMSCC / Canvas) and Echo360 VTT transcripts, uploads content to an [AnythingLLM](https://anythingllm.com/) workspace, and returns embeddable chatbot code for pasting into a course page.
 
@@ -14,33 +14,33 @@ A CLI tool and lightweight WebUI that ingests LMS course exports (Blackboard IMS
 ## Installation
 
 ```bash
-pip install vector-board
+pip install botstash
 ```
 
 ## Quick Start
 
 ```bash
 # Full pipeline
-vectorboard run course.zip transcripts/ \
+botstash run course.zip transcripts/ \
   --workspace ISYS2001 \
   --url https://your-anythingllm.instance \
   --key YOUR_API_KEY
 
 # Two-step workflow (extract, review, embed)
-vectorboard extract course.zip transcripts/ --output ./staging/
+botstash extract course.zip transcripts/ --output ./staging/
 # ... review staging/tags.json ...
-vectorboard embed ./staging/ --workspace ISYS2001
+botstash embed ./staging/ --workspace ISYS2001
 
 # Launch WebUI
-vectorboard serve
+botstash serve
 ```
 
 ## Development
 
 ```bash
 # Clone and install in dev mode
-git clone https://github.com/michaelborck/vector-board.git
-cd vector-board
+git clone https://github.com/michael-borck/botstash.git
+cd botstash
 uv sync --dev
 
 # Run checks
