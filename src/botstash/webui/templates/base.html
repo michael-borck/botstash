@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotStash{% block title_suffix %}{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        body { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .tag-select { padding: 0.25rem; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BotStash</h1>
+        <p>LMS course content to AnythingLLM chatbot pipeline</p>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <small>BotStash v0.1.0</small>
+    </footer>
+</body>
+</html>

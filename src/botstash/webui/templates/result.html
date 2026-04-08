@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title_suffix %} — Result{% endblock %}
+{% block content %}
+<h2>Embed Result</h2>
+
+{% if success %}
+<p class="success">{{ message }}</p>
+<p>Your workspace <strong>{{ slug }}</strong> is ready.</p>
+<p>To get the chatbot embed code, run:</p>
+<pre><code>botstash chatbot {{ workspace }}</code></pre>
+<p>Or copy the embed code from the AnythingLLM settings panel.</p>
+{% else %}
+<p class="error">Error: {{ message }}</p>
+{% endif %}
+
+<a href="/">← Upload another course</a>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title_suffix %} — Review{% endblock %}
+{% block content %}
+<h2>Review Extracted Content</h2>
+<p>{{ tags|length }} items extracted. Adjust types and titles below, then embed.</p>
+
+<form action="/embed/{{ session_id }}" method="post">
+    <table>
+        <thead>
+            <tr>
+                <th>Source File</th>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Week</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tag in tags %}
+            <tr>
+                <td>{{ tag.source_file }}</td>
+                <td><input type="text" name="title_{{ loop.index0 }}" value="{{ tag.title }}"></td>
+                <td>
+                    <select name="type_{{ loop.index0 }}" class="tag-select">
+                        {% for t in valid_types %}
+                        <option value="{{ t }}" {% if t == tag.type %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>{{ tag.week or "—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <fieldset>
+        <legend>AnythingLLM Settings</legend>
+        <label for="workspace">
+            Workspace Name
+            <input type="text" id="workspace" name="workspace" required placeholder="e.g. ISYS2001">
+        </label>
+        <label for="url">
+            AnythingLLM URL
+            <input type="text" id="url" name="url" placeholder="http://localhost:3001">
+        </label>
+        <label for="key">
+            API Key
+            <input type="password" id="key" name="key" placeholder="Your API key">
+        </label>
+    </fieldset>
+
+    <button type="submit">Embed to AnythingLLM</button>
+</form>
+{% endblock %}

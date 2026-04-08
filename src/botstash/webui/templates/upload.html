@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title_suffix %} — Upload{% endblock %}
+{% block content %}
+<h2>Upload Course Content</h2>
+<form action="/extract" method="post" enctype="multipart/form-data">
+    <label for="course_zip">
+        Course Export (IMSCC/ZIP)
+        <input type="file" id="course_zip" name="course_zip" accept=".zip,.imscc" required>
+    </label>
+    <label for="transcripts_zip">
+        Transcripts (ZIP of VTT files)
+        <input type="file" id="transcripts_zip" name="transcripts_zip" accept=".zip" required>
+    </label>
+    <button type="submit">Extract &amp; Classify</button>
+</form>
+{% endblock %}

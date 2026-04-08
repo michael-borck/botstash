@@ -30,6 +30,7 @@ dependencies = [
     "fastapi>=0.115",
     "jinja2>=3.1",
     "uvicorn>=0.32",
+    "python-multipart>=0.0.24",
 ]
 
 [project.scripts]
@@ -53,7 +54,7 @@ line-length = 88
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.11"
