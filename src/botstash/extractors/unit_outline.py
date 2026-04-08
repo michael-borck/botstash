@@ -148,9 +148,13 @@ _TEXTBOOK_SECTION_RE = re.compile(
 )
 
 _DESCRIPTION_SECTION_RE = re.compile(
-    r"(?:^|\n)(?:Syllabus|Introduction|Unit\s+Description|Overview)\s*\n",
+    r"(?:^|\n)(?:Syllabus|Unit\s+Description)\s*\n",
     re.IGNORECASE,
 )
+
+# Introduction as a section heading — case-sensitive to avoid matching
+# lowercase "introduction" in table cells
+_INTRODUCTION_RE = re.compile(r"(?:^|\n)Introduction\s*\n")
 
 # Metadata patterns
 _TITLE_LINE_RE = re.compile(
@@ -207,12 +211,16 @@ _ALL_SECTIONS: list[re.Pattern[str]] = [
     _SCHEDULE_SECTION_RE,
     _TEXTBOOK_SECTION_RE,
     _DESCRIPTION_SECTION_RE,
+    _INTRODUCTION_RE,
     re.compile(
-        r"(?:Academic\s+Integrity|Special\s+Consideration"
+        r"(?:^|\n)(?:Academic\s+Integrity|Special\s+Consideration"
         r"|Referencing\s+Style|Learning\s+Activities"
         r"|Assessment\s+Moderation|Pass\s+requirements"
         r"|Late\s+Assessment|Additional\s+information"
-        r"|Graduate\s+Capabilities|Design\s+Philosophy)",
+        r"|Curtin's\s+Graduate\s+Capabilities"
+        r"|Design\s+Philosophy|Detailed\s+Information\s+on"
+        r"|Assessment\s+Extension|Deferred\s+Assessment"
+        r"|Recent\s+Unit\s+Changes)\s*\n",
         re.IGNORECASE,
     ),
 ]
@@ -289,6 +297,8 @@ def _extract_metadata(text: str) -> dict[str, str | int | None]:
 def _extract_description(text: str) -> str | None:
     """Extract unit description from Syllabus/Introduction sections."""
     section = _section_between(text, _DESCRIPTION_SECTION_RE, _ALL_SECTIONS)
+    if not section:
+        section = _section_between(text, _INTRODUCTION_RE, _ALL_SECTIONS)
     if section:
         return section[:2000]
     return None
@@ -307,11 +317,22 @@ def _extract_learning_outcomes(text: str) -> list[_LearningOutcome]:
     if completion_match:
         section = section[completion_match.end():]
 
+    # Remove repeated "On successful completion" from page breaks
+    section = re.sub(
+        r"On\s+successful\s+completion\s+of\s+this\s+unit\s+student\s+can:\s*\n?",
+        "\n", section, flags=re.IGNORECASE,
+    )
+
     section = re.sub(
         r"Graduate\s+Capabilities\s+addressed\s*\n?",
         "", section, flags=re.IGNORECASE,
     )
     section = re.sub(r"GC\d+\s*:[^\n]*\n?", "", section)
+    # Remove GC description blocks
+    section = re.sub(
+        r"Find\s+out\s+more\s+about\s+Curtin.*$", "",
+        section, flags=re.IGNORECASE | re.DOTALL,
+    )
 
     # Split by numbered items
     items = re.split(r"\n\s*(\d+)\s*\n", section)
@@ -388,11 +409,22 @@ def _extract_assessments(text: str) -> list[_Assessment]:
     return assessments
 
 
-def _extract_weekly_schedule(text: str) -> list[_Week]:
-    """Extract weekly schedule from the Schedule section."""
+def _extract_weekly_schedule(text: str) -> list[_Week]:  # noqa: C901
+    """Extract weekly schedule from the Schedule section.
+
+    Handles multiple formats:
+    1. "Week N: Topic" (simple format)
+    2. Curtin table format: "N\\n16\\nFeb\\nTopic\\nContent..."
+    3. Inline: "N  16 Feb  Topic..."
+    """
     section = _section_between(text, _SCHEDULE_SECTION_RE, _ALL_SECTIONS)
     if not section:
         return []
+
+    _month_re = re.compile(
+        r"^\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
+        re.IGNORECASE,
+    )
 
     weeks: list[_Week] = []
 
@@ -402,27 +434,127 @@ def _extract_weekly_schedule(text: str) -> list[_Week]:
         if topic:
             weeks.append(_Week(week_number=int(m.group(1)), topic=topic))
 
-    # Fallback: numbered lines "N\nTopic line"
-    if not weeks:
-        lines = section.split("\n")
-        i = 0
-        while i < len(lines) - 1:
-            line = lines[i].strip()
-            num_match = re.match(r"^(\d{1,2})$", line)
-            if num_match:
-                week_num = int(num_match.group(1))
-                if 1 <= week_num <= 20:
-                    # Next non-empty line is the topic
-                    j = i + 1
-                    while j < len(lines) and not lines[j].strip():
-                        j += 1
-                    if j < len(lines):
-                        topic = lines[j].strip()[:300]
-                        if topic and not re.match(r"^\d{1,2}$", topic):
-                            weeks.append(_Week(
-                                week_number=week_num, topic=topic
-                            ))
-            i += 1
+    if weeks:
+        return weeks
+
+    # Curtin table format: detect week boundaries by number + date pattern
+    lines = section.split("\n")
+
+    # Skip column headers
+    start = 0
+    for i, line in enumerate(lines):
+        if re.search(r"Assessment\s*\n?Due|Due$", line, re.IGNORECASE):
+            start = i + 1
+            break
+        if re.search(r"^Topic$|^Content$", line.strip(), re.IGNORECASE):
+            start = i + 1
+
+    # Find week boundaries: a line that is a number (or "O") followed
+    # by a date (day number + month name)
+    week_starts: list[tuple[int, str]] = []
+    for i in range(start, len(lines)):
+        line = lines[i].strip()
+
+        # Inline format: "O  9 Feb  ..." or "1  16 Feb  ..."
+        m_inline = re.match(
+            r"^\s*(O|\d{1,2})\s+\d{1,2}\s+"
+            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
+            line, re.IGNORECASE,
+        )
+        if m_inline:
+            week_starts.append((i, m_inline.group(1)))
+            continue
+
+        # Split format: line is just "1", next lines are "16", "Feb"
+        m_num = re.match(r"^\s*(O|\d{1,2})\s*$", line)
+        if m_num:
+            week_id = m_num.group(1)
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j < len(lines):
+                next_line = lines[j].strip()
+                if re.match(r"^\d{1,2}$", next_line):
+                    k = j + 1
+                    while k < len(lines) and not lines[k].strip():
+                        k += 1
+                    if k < len(lines) and _month_re.match(lines[k].strip()):
+                        week_starts.append((i, week_id))
+                        continue
+                elif re.match(
+                    r"^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep"
+                    r"|Oct|Nov|Dec)",
+                    next_line, re.IGNORECASE,
+                ):
+                    week_starts.append((i, week_id))
+
+    # Extract topic from each week block
+    _date_part_re = re.compile(
+        r"^\d{1,2}$"
+        r"|^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*$"
+        r"|^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep"
+        r"|Oct|Nov|Dec)",
+        re.IGNORECASE,
+    )
+
+    for idx, (line_idx, week_id) in enumerate(week_starts):
+        if week_id == "O" or not week_id.isdigit():
+            continue
+
+        block_end = (
+            week_starts[idx + 1][0]
+            if idx + 1 < len(week_starts)
+            else len(lines)
+        )
+        block_lines = [
+            ln.strip() for ln in lines[line_idx + 1:block_end]
+            if ln.strip()
+        ]
+
+        # Skip date lines
+        content_start = 0
+        for j, bl in enumerate(block_lines):
+            if _date_part_re.match(bl):
+                content_start = j + 1
+            else:
+                break
+
+        content_lines = block_lines[content_start:]
+        if not content_lines:
+            continue
+
+        # Topic is first 1-3 short lines (before content column)
+        topic_parts: list[str] = []
+        for cl in content_lines:
+            if cl == "—" or re.match(
+                r"^(?:AIM|AAI|Assessment|Compile|Review|No scheduled"
+                r"|Teams)", cl
+            ):
+                break
+            if topic_parts and "," in cl:
+                break
+            topic_parts.append(cl)
+            joined = " ".join(topic_parts)
+            if len(topic_parts) >= 2 and len(joined) > 18:
+                break
+            if len(joined) > 28:
+                break
+
+        topic = " ".join(topic_parts).strip().rstrip("&").strip()[:300]
+        if topic:
+            activities = content_lines[
+                len(topic_parts):len(topic_parts) + 3
+            ]
+            activity_list = [
+                " ".join(a.split())
+                for a in activities
+                if len(a) > 5 and a != "—"
+            ]
+            weeks.append(_Week(
+                week_number=int(week_id),
+                topic=topic,
+                activities=activity_list[:3],
+            ))
 
     return weeks
 
@@ -471,22 +603,42 @@ def _extract_textbooks(text: str) -> list[_Textbook]:
 # ---------------------------------------------------------------------------
 
 
+def _strip_page_footers(text: str) -> str:
+    """Remove repeated university page footer blocks from PDF text."""
+    return re.sub(
+        r"Faculty of [^\n]+\n"
+        r"School of [^\n]+\n"
+        r"[A-Z]{2,6}\d{3,5}\s+[^\n]+\n"
+        r"[^\n]*Campus\n"
+        r"\d{2}\s+\w+\s+\d{4}\n"
+        r"(?:School of [^\n]+\n)?"
+        r"(?:Page\s+\d+\s+of\s+\d+\n)?"
+        r"CRICOS[^\n]*\n"
+        r"[^\n]*OASIS\s*\n*",
+        "\n",
+        text,
+    )
+
+
 def _parse_outline(text: str) -> _OutlineData:
     """Parse raw text into structured outline data."""
-    metadata = _extract_metadata(text)
+    # Strip page footers for cleaner section extraction
+    clean = _strip_page_footers(text)
+
+    metadata = _extract_metadata(clean)
     return _OutlineData(
         unit_code=metadata.get("unit_code"),  # type: ignore[arg-type]
         unit_title=metadata.get("unit_title"),  # type: ignore[arg-type]
-        description=_extract_description(text),
+        description=_extract_description(clean),
         credit_points=metadata.get("credit_points"),  # type: ignore[arg-type]
         year=metadata.get("year"),  # type: ignore[arg-type]
         semester=metadata.get("semester"),  # type: ignore[arg-type]
         prerequisites=metadata.get("prerequisites"),  # type: ignore[arg-type]
         delivery_mode=metadata.get("delivery_mode"),  # type: ignore[arg-type]
-        learning_outcomes=_extract_learning_outcomes(text),
-        weekly_schedule=_extract_weekly_schedule(text),
-        assessments=_extract_assessments(text),
-        textbooks=_extract_textbooks(text),
+        learning_outcomes=_extract_learning_outcomes(clean),
+        weekly_schedule=_extract_weekly_schedule(clean),
+        assessments=_extract_assessments(clean),
+        textbooks=_extract_textbooks(text),  # use original for textbooks
         raw_text=text,
     )
 
