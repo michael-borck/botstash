@@ -1,0 +1,73 @@
+[project]
+name = "vector-board"
+version = "0.1.0"
+description = "CLI tool and WebUI that ingests LMS course exports and Echo360 transcripts into an AnythingLLM workspace for embedded course chatbots."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Michael", email = "michael@example.com" },
+]
+keywords = ["lms", "chatbot", "anythingllm", "vectorboard", "education"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+]
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "python-pptx>=1.0",
+    "python-docx>=1.1",
+    "pdfminer.six>=20231228",
+    "webvtt-py>=0.5",
+    "fastapi>=0.115",
+    "jinja2>=3.1",
+    "uvicorn>=0.32",
+]
+
+[project.scripts]
+vectorboard = "vectorboard.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/michaelborck/vector-board"
+Repository = "https://github.com/michaelborck/vector-board"
+Issues = "https://github.com/michaelborck/vector-board/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vectorboard"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.20.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.9",
+]

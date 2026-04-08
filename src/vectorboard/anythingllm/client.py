@@ -1,0 +1,1 @@
+"""AnythingLLM REST API wrapper."""
