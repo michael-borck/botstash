@@ -108,6 +108,43 @@ def test_extract_qti_v12(tmp_path: Path) -> None:
     assert "Paris" not in result
 
 
+def test_extract_qti_with_answers(tmp_path: Path) -> None:
+    """QTI extraction with include_answers includes answer choices."""
+    qti_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <questestinterop>
+      <assessment>
+        <section>
+          <item>
+            <presentation>
+              <mattext>What is the capital of France?</mattext>
+              <response_lid>
+                <render_choice>
+                  <response_label><mattext>London</mattext></response_label>
+                  <response_label><mattext>Paris</mattext></response_label>
+                  <response_label><mattext>Berlin</mattext></response_label>
+                </render_choice>
+              </response_lid>
+            </presentation>
+          </item>
+        </section>
+      </assessment>
+    </questestinterop>"""
+    qti_path = tmp_path / "quiz_answers.xml"
+    qti_path.write_text(qti_xml)
+
+    # Without answers
+    result = extract_qti(qti_path, include_answers=False)
+    assert "What is the capital of France?" in result
+    assert "London" not in result
+
+    # With answers
+    result = extract_qti(qti_path, include_answers=True)
+    assert "What is the capital of France?" in result
+    assert "A. London" in result
+    assert "B. Paris" in result
+    assert "C. Berlin" in result
+
+
 def test_extract_urls() -> None:
     """URL extraction finds href and src URLs from HTML."""
     html = """

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -31,6 +32,16 @@ VALID_TYPES = {
     "misc",
 }
 
+# Signals for unit outline content detection
+_OUTLINE_SIGNALS = [
+    r"assessment\s+(?:schedule|summary|overview|tasks?)",
+    r"learning\s+outcomes?",
+    r"(?:weekly|teaching|program)\s+(?:schedule|calendar)",
+    r"credit\s+(?:points?|value)",
+    r"(?:unit|course)\s+(?:description|guide|outline)",
+    r"pre-?requisite",
+]
+
 
 def _classify_by_filename(source_file: str) -> str | None:
     """Pass 1: match keywords against filename and parent folder."""
@@ -42,20 +53,25 @@ def _classify_by_filename(source_file: str) -> str | None:
 
 
 def _classify_by_content(text: str, file_type: str) -> str | None:
-    """Pass 2: inspect first 500 chars for structural signals."""
+    """Pass 2: inspect content for structural signals."""
     if file_type in (".vtt", "vtt"):
         return "transcript"
     if file_type in ("url",):
         return "video_url"
 
-    snippet = text[:500].lower()
+    snippet = text[:2000].lower()
 
     # QTI namespace is a strong signal
     if "imsglobal.org/xsd" in snippet and "qti" in snippet:
         return "quiz"
 
-    # Unit outline signals
-    if "learning outcomes" in snippet or "unit guide" in snippet:
+    # Unit outline: check for multiple structural signals
+    signal_count = sum(
+        1
+        for pattern in _OUTLINE_SIGNALS
+        if re.search(pattern, snippet, re.IGNORECASE)
+    )
+    if signal_count >= 2:
         return "unit_outline"
 
     return None
@@ -63,12 +79,10 @@ def _classify_by_content(text: str, file_type: str) -> str | None:
 
 def _extract_week(source_file: str, text: str) -> int | None:
     """Extract week number from filename or text content."""
-    # Try filename first
     match = re.search(r"week\s*(\d+)", source_file, re.IGNORECASE)
     if match:
         return int(match.group(1))
 
-    # Try first 200 chars of text
     match = re.search(r"week\s*(\d+)", text[:200], re.IGNORECASE)
     if match:
         return int(match.group(1))
@@ -79,12 +93,23 @@ def _extract_week(source_file: str, text: str) -> int | None:
 def _derive_title(source_file: str) -> str:
     """Derive a human-readable title from a filename."""
     stem = Path(source_file).stem
-    # Replace separators with spaces
     title = stem.replace("_", " ").replace("-", " ")
-    # Collapse multiple spaces
     title = re.sub(r"\s+", " ", title).strip()
-    # Title case
     return title.title()
+
+
+def _safe_filename(source_file: str, used: set[str]) -> str:
+    """Generate a unique filename for extracted text."""
+    stem = Path(source_file).stem
+    name = f"{stem}.txt"
+    if name not in used:
+        used.add(name)
+        return name
+    # Collision: append short hash of full source path
+    h = hashlib.md5(source_file.encode()).hexdigest()[:6]  # noqa: S324
+    name = f"{stem}_{h}.txt"
+    used.add(name)
+    return name
 
 
 def classify(
@@ -97,10 +122,14 @@ def classify(
     - Pass 2: content inspection (overrides Pass 1 on high-confidence)
     - Fallback: 'misc'
 
+    When a document is classified as unit_outline and is a DOCX/PDF,
+    re-extracts using the structured outline extractor.
+
     Writes extracted text files to output_dir and generates tags.json.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     tags: list[TagEntry] = []
+    used_names: set[str] = set()
 
     for record in records:
         # Run both passes
@@ -115,10 +144,24 @@ def classify(
         else:
             doc_type = "misc"
 
-        # Write extracted text to file
-        safe_name = Path(record.source_file).stem + ".txt"
+        # Re-extract unit outlines with structured extractor
+        extracted_text = record.extracted_text
+        if doc_type == "unit_outline" and record.file_type in (
+            ".docx", ".pdf"
+        ):
+            try:
+                from botstash.extractors.unit_outline import (
+                    extract_unit_outline,
+                )
+
+                extracted_text = extract_unit_outline(record.source_file)
+            except Exception:
+                pass  # Fall back to raw text
+
+        # Write extracted text to file (collision-safe)
+        safe_name = _safe_filename(record.source_file, used_names)
         text_path = output_dir / safe_name
-        text_path.write_text(record.extracted_text)
+        text_path.write_text(extracted_text)
 
         # Extract metadata
         week = _extract_week(record.source_file, record.extracted_text)

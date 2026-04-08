@@ -9,10 +9,12 @@ from pathlib import Path
 
 @dataclass
 class BotStashConfig:
-    """AnythingLLM connection configuration."""
+    """BotStash configuration."""
 
     url: str | None = None
     key: str | None = None
+    include_answers: bool = False
+    recursive: bool = True
 
 
 @dataclass

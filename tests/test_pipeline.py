@@ -13,53 +13,60 @@ def _make_vtt(path: Path, text: str) -> None:
     )
 
 
-def _make_imscc(tmp_path: Path) -> Path:
-    """Build a minimal IMSCC ZIP."""
-    vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nCourse intro\n"
+def test_run_extract_folder(tmp_path: Path) -> None:
+    """Extract pipeline scans a folder with mixed content."""
+    # Create a folder with VTT files and an IMSCC ZIP
+    content = tmp_path / "course"
+    content.mkdir()
+
+    _make_vtt(content / "Week_1_Lecture.vtt", "Lecture content")
+    _make_vtt(content / "Week_2_Tutorial.vtt", "Tutorial content")
+
+    # Add an IMSCC ZIP
+    vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nFrom IMSCC\n"
     manifest = """<?xml version="1.0" encoding="UTF-8"?>
 <manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
-  <organizations>
-    <organization>
-      <item identifier="item_0" identifierref="res_0">
-        <title>Week 1 Lecture Recording</title>
-      </item>
-    </organization>
-  </organizations>
+  <organizations><organization>
+    <item identifier="i0" identifierref="r0">
+      <title>Intro</title>
+    </item>
+  </organization></organizations>
   <resources>
-    <resource identifier="res_0" type="webcontent" href="lecture.vtt">
-      <file href="lecture.vtt"/>
+    <resource identifier="r0" type="webcontent" href="intro.vtt">
+      <file href="intro.vtt"/>
     </resource>
   </resources>
 </manifest>"""
-    zip_path = tmp_path / "course.imscc"
+    zip_path = content / "export.imscc"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr("imsmanifest.xml", manifest)
-        zf.writestr("lecture.vtt", vtt)
-    return zip_path
-
-
-def test_run_extract(tmp_path: Path) -> None:
-    """Full extract pipeline produces tags.json."""
-    # Set up IMSCC
-    zip_path = _make_imscc(tmp_path)
-
-    # Set up transcripts folder
-    transcripts = tmp_path / "transcripts"
-    transcripts.mkdir()
-    _make_vtt(transcripts / "Week_2_Tutorial.vtt", "Tutorial content")
+        zf.writestr("intro.vtt", vtt)
 
     # Run pipeline
     output_dir = tmp_path / "staging"
-    tags = run_extract(zip_path, transcripts, output_dir)
+    tags = run_extract(content, output_dir)
 
-    # Verify
-    assert len(tags) >= 2
+    # Should find: 2 loose VTT + 1 from IMSCC = 3
+    assert len(tags) >= 3
     assert (output_dir / "tags.json").exists()
 
-    # Check we can read back
     loaded = read_tags(output_dir / "tags.json")
     assert len(loaded) == len(tags)
 
-    # Check types are assigned
     types = {t.type for t in tags}
-    assert "transcript" in types  # VTT files
+    assert "transcript" in types
+
+
+def test_run_extract_non_recursive(tmp_path: Path) -> None:
+    """Non-recursive extract only processes top-level."""
+    content = tmp_path / "course"
+    content.mkdir()
+    sub = content / "week1"
+    sub.mkdir()
+
+    _make_vtt(content / "intro.vtt", "Top level")
+    _make_vtt(sub / "deep.vtt", "Nested")
+
+    output_dir = tmp_path / "staging"
+    tags = run_extract(content, output_dir, recursive=False)
+    assert len(tags) == 1

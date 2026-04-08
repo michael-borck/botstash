@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import uuid
+import zipfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -20,45 +21,43 @@ _SESSIONS_DIR = Path(tempfile.gettempdir()) / "botstash_sessions"
 
 def create_app() -> FastAPI:
     """Create the BotStash FastAPI application."""
-    app = FastAPI(title="BotStash", version="0.1.0")
+    app = FastAPI(title="BotStash", version="0.1.1")
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
     @app.get("/", response_class=HTMLResponse)
     async def upload_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request, "upload.html"
-        )
+        return templates.TemplateResponse(request, "upload.html")
 
     @app.post("/extract")
     async def extract_action(
         request: Request,
-        course_zip: UploadFile = File(...),  # noqa: B008
-        transcripts_zip: UploadFile = File(...),  # noqa: B008
+        content_zip: UploadFile = File(...),  # noqa: B008
     ) -> HTMLResponse:
+        form = await request.form()
+        include_answers = form.get("include_answers") == "on"
+        recursive = form.get("recursive", "on") == "on"
+
         session_id = str(uuid.uuid4())
         session_dir = _SESSIONS_DIR / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
+        content_dir = session_dir / "content"
+        content_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save uploaded files
-        zip_path = session_dir / "course.zip"
+        # Save and unzip uploaded content
+        zip_path = session_dir / "upload.zip"
         with open(zip_path, "wb") as f:
-            f.write(await course_zip.read())
+            f.write(await content_zip.read())
 
-        # Handle transcripts ZIP
-        transcripts_dir = session_dir / "transcripts"
-        transcripts_dir.mkdir()
-        trans_zip_path = session_dir / "transcripts.zip"
-        with open(trans_zip_path, "wb") as f:
-            f.write(await transcripts_zip.read())
-
-        import zipfile
-
-        with zipfile.ZipFile(trans_zip_path, "r") as zf:
-            zf.extractall(transcripts_dir)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(content_dir)
 
         # Run extraction
         staging = session_dir / "staging"
-        tags = run_extract(zip_path, transcripts_dir, staging)
+        tags = run_extract(
+            content_dir,
+            staging,
+            recursive=recursive,
+            include_answers=include_answers,
+        )
 
         return templates.TemplateResponse(
             request,
@@ -90,7 +89,6 @@ def create_app() -> FastAPI:
         tags_path = staging / "tags.json"
         tags = read_tags(tags_path)
 
-        # Update types from form dropdowns
         for i, tag in enumerate(tags):
             new_type = form_data.get(f"type_{i}")
             new_title = form_data.get(f"title_{i}")
@@ -114,7 +112,7 @@ def create_app() -> FastAPI:
                     "workspace": workspace,
                     "slug": slug,
                     "success": True,
-                    "message": f"Embedded {len(tags)} items to '{slug}'.",
+                    "message": f"Embedded {len(tags)} items.",
                 },
             )
         except Exception as e:

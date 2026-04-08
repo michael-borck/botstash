@@ -2,15 +2,25 @@
 {% block title_suffix %} — Upload{% endblock %}
 {% block content %}
 <h2>Upload Course Content</h2>
+<p>ZIP your course materials (PDFs, DOCX, PPTX, VTT transcripts, IMSCC exports) and upload.</p>
 <form action="/extract" method="post" enctype="multipart/form-data">
-    <label for="course_zip">
-        Course Export (IMSCC/ZIP)
-        <input type="file" id="course_zip" name="course_zip" accept=".zip,.imscc" required>
+    <label for="content_zip">
+        Course Content (ZIP)
+        <input type="file" id="content_zip" name="content_zip" accept=".zip,.imscc" required>
     </label>
-    <label for="transcripts_zip">
-        Transcripts (ZIP of VTT files)
-        <input type="file" id="transcripts_zip" name="transcripts_zip" accept=".zip" required>
-    </label>
+
+    <fieldset>
+        <legend>Options</legend>
+        <label>
+            <input type="checkbox" name="include_answers">
+            Include quiz answer choices
+        </label>
+        <label>
+            <input type="checkbox" name="recursive" checked>
+            Scan subfolders recursively
+        </label>
+    </fieldset>
+
     <button type="submit">Extract &amp; Classify</button>
 </form>
 {% endblock %}

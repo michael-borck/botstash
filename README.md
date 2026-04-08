@@ -1,12 +1,13 @@
 # BotStash
 
-A CLI tool and lightweight WebUI that ingests LMS course exports (Blackboard IMSCC / Canvas) and Echo360 VTT transcripts, uploads content to an [AnythingLLM](https://anythingllm.com/) workspace, and returns embeddable chatbot code for pasting into a course page.
+A CLI tool and lightweight WebUI that extracts course content (PDFs, DOCX, PPTX, VTT transcripts, IMSCC exports), classifies it, and uploads to an [AnythingLLM](https://anythingllm.com/) workspace for embedded chatbots.
 
 ## Features
 
-- **IMSCC ingestion** — unzips and walks Blackboard/Canvas common cartridge exports
-- **Transcript ingestion** — processes folders of Echo360 VTT files
-- **Multi-format extraction** — PPTX, DOCX, PDF, VTT, QTI quizzes
+- **Folder-first scanning** — point at a folder, BotStash figures out the rest
+- **Multi-format extraction** — PPTX, DOCX, PDF, VTT, QTI quizzes, IMSCC exports
+- **Recursive ZIP handling** — nested ZIPs and IMSCC archives are auto-detected
+- **Structured unit outline parsing** — extracts assessments, schedules, learning outcomes with Bloom's taxonomy
 - **Auto-classification** — heuristic tagging of content types (lecture, worksheet, assignment, etc.)
 - **AnythingLLM integration** — uploads documents, manages workspaces, retrieves embed code
 - **WebUI** — FastAPI + Jinja2 interface for non-terminal users
@@ -20,32 +21,49 @@ pip install botstash
 ## Quick Start
 
 ```bash
-# Full pipeline
-botstash run course.zip transcripts/ \
-  --workspace ISYS2001 \
-  --url https://your-anythingllm.instance \
-  --key YOUR_API_KEY
+# Full pipeline — point at a folder
+botstash run ./course-materials/ --workspace ISYS2001
 
 # Two-step workflow (extract, review, embed)
-botstash extract course.zip transcripts/ --output ./staging/
+botstash extract ./course-materials/ --output ./staging/
 # ... review staging/tags.json ...
 botstash embed ./staging/ --workspace ISYS2001
+
+# Include quiz answer choices
+botstash extract ./folder/ --include-answers
+
+# Non-recursive (top-level only)
+botstash extract ./folder/ --no-recursive
 
 # Launch WebUI
 botstash serve
 ```
 
+## Configuration
+
+Settings are resolved in priority order: CLI flag > environment variable > `.botstash.env` file.
+
+```bash
+# Scaffold a config file
+botstash init
+```
+
+`.botstash.env`:
+```
+ANYTHINGLLM_URL=http://localhost:3001
+ANYTHINGLLM_KEY=your-api-key
+INCLUDE_ANSWERS=false
+RECURSIVE=true
+```
+
 ## Development
 
 ```bash
-# Clone and install in dev mode
 git clone https://github.com/michael-borck/botstash.git
 cd botstash
 uv sync --dev
 
-# Run checks
 uv run ruff check src/ tests/
-uv run mypy src/
 uv run pytest
 ```
 

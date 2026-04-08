@@ -13,53 +13,84 @@ from botstash.config import load_config
 @click.group()
 @click.version_option(version=__version__, prog_name="botstash")
 def cli() -> None:
-    """BotStash — LMS course content to AnythingLLM chatbot pipeline."""
+    """BotStash — extract course content for AnythingLLM chatbots."""
 
 
 @cli.command()
-@click.argument("course_zip", type=click.Path(exists=True))
-@click.argument("transcripts", type=click.Path(exists=True))
+@click.argument("source", type=click.Path(exists=True))
 @click.option("--workspace", required=True, help="AnythingLLM workspace name.")
 @click.option("--url", envvar="ANYTHINGLLM_URL", help="AnythingLLM instance URL.")
 @click.option("--key", envvar="ANYTHINGLLM_KEY", help="AnythingLLM API key.")
 @click.option("--keep-staging", is_flag=True, help="Keep staging files after embed.")
+@click.option("--include-answers/--no-include-answers", default=None,
+              help="Include quiz answer choices.")
+@click.option("--recursive/--no-recursive", default=None,
+              help="Recursively scan subdirectories.")
 def run(
-    course_zip: str,
-    transcripts: str,
+    source: str,
     workspace: str,
     url: str | None,
     key: str | None,
     keep_staging: bool,
+    include_answers: bool | None,
+    recursive: bool | None,
 ) -> None:
-    """Run the full extract-classify-embed pipeline."""
+    """Run the full extract-classify-embed pipeline.
+
+    SOURCE is a folder containing course materials (PDFs, DOCX, PPTX,
+    VTT transcripts, IMSCC exports, or ZIPs).
+    """
     from botstash.pipeline import run_full
 
-    config = load_config(url_override=url, key_override=key)
+    config = load_config(
+        url_override=url,
+        key_override=key,
+        include_answers_override=include_answers,
+        recursive_override=recursive,
+    )
     try:
         slug = run_full(
-            Path(course_zip),
-            Path(transcripts),
-            workspace,
-            config,
-            keep_staging=keep_staging,
+            Path(source), workspace, config, keep_staging=keep_staging
         )
         click.echo(f"Done! Workspace '{slug}' is ready.")
-        click.echo(f"Run 'botstash chatbot {workspace}' to get the embed code.")
+        click.echo(
+            f"Run 'botstash chatbot {workspace}' to get the embed code."
+        )
     except Exception as e:
         raise click.ClickException(str(e)) from e
 
 
 @cli.command()
-@click.argument("course_zip", type=click.Path(exists=True))
-@click.argument("transcripts", type=click.Path(exists=True))
+@click.argument("source", type=click.Path(exists=True))
 @click.option("--output", default="./staging", help="Output directory.")
-def extract(course_zip: str, transcripts: str, output: str) -> None:
-    """Extract and auto-classify content from a course export."""
+@click.option("--include-answers/--no-include-answers", default=None,
+              help="Include quiz answer choices.")
+@click.option("--recursive/--no-recursive", default=None,
+              help="Recursively scan subdirectories.")
+def extract(
+    source: str,
+    output: str,
+    include_answers: bool | None,
+    recursive: bool | None,
+) -> None:
+    """Extract and auto-classify content from a folder.
+
+    SOURCE is a folder containing course materials.
+    """
     from botstash.pipeline import run_extract
 
+    config = load_config(
+        include_answers_override=include_answers,
+        recursive_override=recursive,
+    )
     output_dir = Path(output)
     try:
-        tags = run_extract(Path(course_zip), Path(transcripts), output_dir)
+        tags = run_extract(
+            Path(source),
+            output_dir,
+            recursive=config.recursive,
+            include_answers=config.include_answers,
+        )
         click.echo(f"Extracted {len(tags)} items to {output_dir}/")
         for tag in tags:
             click.echo(f"  [{tag.type}] {tag.title}")
@@ -126,9 +157,14 @@ def init() -> None:
 
     url = click.prompt("AnythingLLM URL", default="http://localhost:3001")
     key = click.prompt("AnythingLLM API key")
+    answers = click.confirm("Include quiz answers?", default=False)
+    recursive = click.confirm("Recursive folder scanning?", default=True)
 
     env_path.write_text(
-        f"ANYTHINGLLM_URL={url}\nANYTHINGLLM_KEY={key}\n"
+        f"ANYTHINGLLM_URL={url}\n"
+        f"ANYTHINGLLM_KEY={key}\n"
+        f"INCLUDE_ANSWERS={'true' if answers else 'false'}\n"
+        f"RECURSIVE={'true' if recursive else 'false'}\n"
     )
     click.echo(f"Written to {env_path}")
 
@@ -144,6 +180,7 @@ def serve(host: str, port: int) -> None:
         from botstash.webui.app import create_app
 
         app = create_app()
+        click.echo(f"BotStash WebUI: http://{host}:{port}")
         uvicorn.run(app, host=host, port=port)
     except ImportError as e:
         raise click.ClickException(

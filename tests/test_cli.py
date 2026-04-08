@@ -1,6 +1,5 @@
 """Tests for CLI commands using Click's CliRunner."""
 
-import zipfile
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -13,45 +12,24 @@ def test_version() -> None:
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert "botstash" in result.output
-    assert "0.1.0" in result.output
+    assert "0.1.1" in result.output
 
 
 def test_extract_command(tmp_path: Path) -> None:
-    """Extract command processes IMSCC + transcripts."""
+    """Extract command scans a folder."""
     runner = CliRunner()
 
-    # Build minimal IMSCC
-    vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello\n"
-    manifest = """<?xml version="1.0" encoding="UTF-8"?>
-<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
-  <organizations><organization>
-    <item identifier="i0" identifierref="r0">
-      <title>Intro</title>
-    </item>
-  </organization></organizations>
-  <resources>
-    <resource identifier="r0" type="webcontent" href="intro.vtt">
-      <file href="intro.vtt"/>
-    </resource>
-  </resources>
-</manifest>"""
-    zip_path = tmp_path / "course.imscc"
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("imsmanifest.xml", manifest)
-        zf.writestr("intro.vtt", vtt)
-
-    # Create transcripts dir
-    transcripts = tmp_path / "transcripts"
-    transcripts.mkdir()
-    (transcripts / "Lecture_1.vtt").write_text(
+    # Create a folder with a VTT file
+    content = tmp_path / "course"
+    content.mkdir()
+    (content / "Lecture_1.vtt").write_text(
         "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nContent\n"
     )
 
     output = tmp_path / "staging"
     result = runner.invoke(cli, [
         "extract",
-        str(zip_path),
-        str(transcripts),
+        str(content),
         "--output", str(output),
     ])
     assert result.exit_code == 0
@@ -59,14 +37,40 @@ def test_extract_command(tmp_path: Path) -> None:
     assert (output / "tags.json").exists()
 
 
+def test_extract_no_recursive(tmp_path: Path) -> None:
+    """Extract with --no-recursive skips subdirectories."""
+    runner = CliRunner()
+
+    content = tmp_path / "course"
+    content.mkdir()
+    sub = content / "week1"
+    sub.mkdir()
+    (content / "top.vtt").write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nTop\n"
+    )
+    (sub / "deep.vtt").write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nDeep\n"
+    )
+
+    output = tmp_path / "staging"
+    result = runner.invoke(cli, [
+        "extract",
+        str(content),
+        "--output", str(output),
+        "--no-recursive",
+    ])
+    assert result.exit_code == 0
+    assert "Extracted 1 items" in result.output
+
+
 def test_init_command(tmp_path: Path) -> None:
-    """Init command scaffolds .botstash.env."""
+    """Init command scaffolds .botstash.env with all settings."""
     runner = CliRunner()
 
     with runner.isolated_filesystem(temp_dir=tmp_path):
         result = runner.invoke(
             cli, ["init"],
-            input="http://localhost:3001\nmy-api-key\n",
+            input="http://localhost:3001\nmy-api-key\nn\ny\n",
         )
         assert result.exit_code == 0
         env_path = Path(".botstash.env")
@@ -74,3 +78,5 @@ def test_init_command(tmp_path: Path) -> None:
         content = env_path.read_text()
         assert "ANYTHINGLLM_URL=http://localhost:3001" in content
         assert "ANYTHINGLLM_KEY=my-api-key" in content
+        assert "INCLUDE_ANSWERS=false" in content
+        assert "RECURSIVE=true" in content

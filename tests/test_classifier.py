@@ -7,6 +7,7 @@ from botstash.classifier.auto import (
     _classify_by_filename,
     _derive_title,
     _extract_week,
+    _safe_filename,
     classify,
 )
 from botstash.models import ResourceRecord, read_tags
@@ -45,9 +46,32 @@ def test_pass2_qti_namespace() -> None:
     assert _classify_by_content(text, ".xml") == "quiz"
 
 
-def test_pass2_unit_outline() -> None:
+def test_pass2_unit_outline_single_signal() -> None:
+    """Single signal is not enough for unit_outline."""
     text = "This unit covers... Learning Outcomes: 1. Understand..."
+    assert _classify_by_content(text, ".docx") is None
+
+
+def test_pass2_unit_outline_multiple_signals() -> None:
+    """Two+ structural signals → unit_outline."""
+    text = (
+        "Learning Outcomes\n"
+        "1. Explain the role of IS\n"
+        "Assessment Schedule\n"
+        "Assignment 1 30%\n"
+    )
     assert _classify_by_content(text, ".docx") == "unit_outline"
+
+
+def test_pass2_unit_outline_three_signals() -> None:
+    """Three signals → high confidence unit_outline."""
+    text = (
+        "Credit Points: 25\n"
+        "Learning Outcomes\n"
+        "Weekly Schedule\n"
+        "Week 1: Introduction\n"
+    )
+    assert _classify_by_content(text, ".pdf") == "unit_outline"
 
 
 def test_pass2_no_match() -> None:
@@ -133,3 +157,44 @@ def test_classify_fallback_misc(tmp_path: Path) -> None:
     ]
     tags = classify(records, tmp_path / "staging")
     assert tags[0].type == "misc"
+
+
+def test_safe_filename_no_collision() -> None:
+    """Unique filenames pass through unchanged."""
+    used: set[str] = set()
+    assert _safe_filename("lecture.pptx", used) == "lecture.txt"
+    assert _safe_filename("notes.docx", used) == "notes.txt"
+
+
+def test_safe_filename_collision() -> None:
+    """Colliding filenames get a hash suffix."""
+    used: set[str] = set()
+    name1 = _safe_filename("folder1/slides.pptx", used)
+    name2 = _safe_filename("folder2/slides.pptx", used)
+    assert name1 == "slides.txt"
+    assert name2 != "slides.txt"
+    assert name2.startswith("slides_")
+    assert name2.endswith(".txt")
+
+
+def test_classify_filename_collision(tmp_path: Path) -> None:
+    """Files with same stem from different paths don't overwrite."""
+    records = [
+        ResourceRecord(
+            source_file="week1/notes.docx",
+            extracted_text="Week 1 notes",
+            file_type=".docx",
+            title="Week 1 Notes",
+        ),
+        ResourceRecord(
+            source_file="week2/notes.docx",
+            extracted_text="Week 2 notes",
+            file_type=".docx",
+            title="Week 2 Notes",
+        ),
+    ]
+    tags = classify(records, tmp_path / "staging")
+    assert len(tags) == 2
+    # Both files should exist with different names
+    paths = {Path(t.extracted_as).name for t in tags}
+    assert len(paths) == 2  # no collision
