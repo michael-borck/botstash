@@ -1,6 +1,6 @@
 [project]
 name = "botstash"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI tool and WebUI that ingests LMS course exports and Echo360 transcripts into an AnythingLLM workspace for embedded course chatbots."
 readme = "README.md"
 license = "MIT"
