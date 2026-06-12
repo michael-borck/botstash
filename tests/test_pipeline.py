@@ -70,3 +70,48 @@ def test_run_extract_non_recursive(tmp_path: Path) -> None:
     output_dir = tmp_path / "staging"
     tags = run_extract(content, output_dir, recursive=False)
     assert len(tags) == 1
+
+
+def test_run_embed_errors_when_staged_files_missing(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    """run_embed raises instead of silently embedding nothing."""
+    import pytest
+
+    import botstash.pipeline as pipeline
+    from botstash.models import BotStashConfig, TagEntry, write_tags
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    write_tags(
+        [
+            TagEntry(
+                source_file="gone.vtt",
+                extracted_as=str(staging / "gone.txt"),
+                type="transcript",
+                title="Gone",
+            )
+        ],
+        staging / "tags.json",
+    )
+
+    class FakeClient:
+        def __init__(self, url: str, key: str) -> None:
+            pass
+
+        def __enter__(self) -> "FakeClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def get_or_create_workspace(self, name: str) -> dict:
+            return {"slug": "test"}
+
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        pipeline, "AnythingLLMClient", FakeClient
+    )
+
+    config = BotStashConfig(url="http://localhost:3001", key="k")
+    with pytest.raises(ValueError, match="missing from disk"):
+        pipeline.run_embed(staging, "Test", config)

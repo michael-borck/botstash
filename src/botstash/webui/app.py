@@ -11,6 +11,8 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from botstash import __version__
+from botstash.classifier.auto import VALID_TYPES, VALID_TYPES_ORDERED
 from botstash.config import load_config
 from botstash.models import read_tags, write_tags
 from botstash.pipeline import run_embed, run_extract
@@ -21,8 +23,9 @@ _SESSIONS_DIR = Path(tempfile.gettempdir()) / "botstash_sessions"
 
 def create_app() -> FastAPI:
     """Create the BotStash FastAPI application."""
-    app = FastAPI(title="BotStash", version="0.1.1")
+    app = FastAPI(title="BotStash", version=__version__)
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    templates.env.globals["botstash_version"] = __version__
 
     @app.get("/", response_class=HTMLResponse)
     async def upload_page(request: Request) -> HTMLResponse:
@@ -35,7 +38,9 @@ def create_app() -> FastAPI:
     ) -> HTMLResponse:
         form = await request.form()
         include_answers = form.get("include_answers") == "on"
-        recursive = form.get("recursive", "on") == "on"
+        # Unchecked checkboxes are absent from form data, so absence
+        # means the user turned recursion off
+        recursive = form.get("recursive") == "on"
 
         session_id = str(uuid.uuid4())
         session_dir = _SESSIONS_DIR / session_id
@@ -65,11 +70,7 @@ def create_app() -> FastAPI:
             context={
                 "session_id": session_id,
                 "tags": tags,
-                "valid_types": [
-                    "lecture", "worksheet", "assignment", "rubric",
-                    "unit_outline", "quiz", "reading", "transcript",
-                    "video_url", "misc",
-                ],
+                "valid_types": list(VALID_TYPES_ORDERED),
             },
         )
 
@@ -92,7 +93,7 @@ def create_app() -> FastAPI:
         for i, tag in enumerate(tags):
             new_type = form_data.get(f"type_{i}")
             new_title = form_data.get(f"title_{i}")
-            if new_type:
+            if new_type and str(new_type) in VALID_TYPES:
                 tag.type = str(new_type)
             if new_title:
                 tag.title = str(new_title)

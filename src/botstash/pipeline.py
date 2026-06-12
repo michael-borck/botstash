@@ -9,9 +9,10 @@ import zipfile
 from pathlib import Path
 
 from botstash.anythingllm.client import AnythingLLMClient
-from botstash.classifier.auto import classify
+from botstash.classifier.auto import classify, is_unit_outline
 from botstash.extractors import extract_file
 from botstash.extractors.qti import extract_qti
+from botstash.extractors.unit_outline import extract_unit_outline
 from botstash.ingester.imscc import extract_imscc
 from botstash.models import BotStashConfig, ResourceRecord, TagEntry, read_tags
 
@@ -25,6 +26,7 @@ def scan_folder(
     *,
     recursive: bool = True,
     include_answers: bool = False,
+    url_log_dir: Path | None = None,
     _zip_depth: int = 0,
 ) -> list[ResourceRecord]:
     """Recursively scan a folder for extractable content.
@@ -40,6 +42,7 @@ def scan_folder(
         root: Directory to scan.
         recursive: Walk subdirectories (default True).
         include_answers: Include answer choices in quiz extraction.
+        url_log_dir: Where IMSCC URL logs (urls_log.txt) are written.
         _zip_depth: Internal counter to prevent ZIP bombs.
     """
     records: list[ResourceRecord] = []
@@ -69,6 +72,7 @@ def scan_folder(
                 _process_zip(
                     file_path,
                     include_answers=include_answers,
+                    url_log_dir=url_log_dir,
                     zip_depth=_zip_depth,
                 )
             )
@@ -93,12 +97,30 @@ def scan_folder(
 
         # Standard extractable files
         elif suffix in (".pdf", ".docx", ".pptx", ".vtt"):
-            text = extract_file(file_path)
-            if text:
+            try:
+                extracted = extract_file(file_path)
+            except Exception as e:
+                logger.warning(
+                    "Skipping %s: extraction failed (%s)", file_path, e
+                )
+                continue
+            if extracted:
+                # Re-extract unit outlines with the structured extractor
+                # while the source file is still on disk
+                if suffix in (".pdf", ".docx") and is_unit_outline(
+                    str(file_path), extracted
+                ):
+                    try:
+                        extracted = extract_unit_outline(str(file_path))
+                    except Exception:
+                        logger.debug(
+                            "Structured outline extraction failed for %s",
+                            file_path,
+                        )
                 records.append(
                     ResourceRecord(
                         source_file=str(file_path),
-                        extracted_text=text,
+                        extracted_text=extracted,
                         file_type=suffix,
                         title=file_path.stem.replace("_", " ").replace(
                             "-", " "
@@ -113,6 +135,7 @@ def _process_zip(
     zip_path: Path,
     *,
     include_answers: bool = False,
+    url_log_dir: Path | None = None,
     zip_depth: int = 0,
 ) -> list[ResourceRecord]:
     """Process a ZIP file — use IMSCC parser if manifest found, else recurse."""
@@ -124,7 +147,7 @@ def _process_zip(
         return []
 
     if has_manifest:
-        return extract_imscc(zip_path)
+        return extract_imscc(zip_path, output_dir=url_log_dir)
 
     # Not IMSCC — unzip to temp dir and scan contents
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -135,6 +158,7 @@ def _process_zip(
             tmp,
             recursive=True,
             include_answers=include_answers,
+            url_log_dir=url_log_dir,
             _zip_depth=zip_depth + 1,
         )
 
@@ -156,10 +180,12 @@ def run_extract(
 
     Returns the list of classified tag entries.
     """
+    output_dir.mkdir(parents=True, exist_ok=True)
     records = scan_folder(
         source,
         recursive=recursive,
         include_answers=include_answers,
+        url_log_dir=output_dir,
     )
     return classify(records, output_dir)
 
@@ -185,6 +211,9 @@ def run_embed(
     actual_tags_path = tags_path or (staging_dir / "tags.json")
     tags = read_tags(actual_tags_path)
 
+    uploaded = 0
+    skipped: list[str] = []
+
     with AnythingLLMClient(config.url, config.key) as client:
         ws = client.get_or_create_workspace(workspace)
         slug = ws["slug"]
@@ -195,6 +224,10 @@ def run_embed(
         for tag in tags:
             extracted_path = Path(tag.extracted_as)
             if not extracted_path.exists():
+                logger.warning(
+                    "Skipping missing staged file: %s", extracted_path
+                )
+                skipped.append(str(extracted_path))
                 continue
 
             result = client.upload_document(extracted_path)
@@ -204,8 +237,26 @@ def run_embed(
             ]
             if locations:
                 client.move_to_workspace(slug, locations)
+                uploaded += 1
 
-    return slug
+    if uploaded == 0:
+        if skipped:
+            msg = (
+                f"No documents embedded: {len(skipped)} staged file(s) "
+                f"listed in tags.json are missing from disk. "
+                f"Re-run extract or check the staging directory."
+            )
+        else:
+            msg = "No documents embedded: tags.json has no entries."
+        raise ValueError(msg)
+    if skipped:
+        logger.warning(
+            "Embedded %d document(s); %d staged file(s) were missing.",
+            uploaded,
+            len(skipped),
+        )
+
+    return str(slug)
 
 
 def run_full(

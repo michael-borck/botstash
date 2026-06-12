@@ -64,11 +64,18 @@ class AnythingLLMClient:
         return data.get("workspace", data)  # type: ignore[no-any-return]
 
     def get_or_create_workspace(self, name: str) -> dict[str, Any]:
-        """Get an existing workspace by name/slug or create a new one."""
+        """Get an existing workspace by name/slug or create a new one.
+
+        Matches on the derived slug or a case-insensitive name match,
+        since AnythingLLM's own slugification may differ.
+        """
         slug = name.lower().replace(" ", "-")
-        existing = self.get_workspace(slug)
-        if existing:
-            return existing
+        for ws in self.list_workspaces():
+            if (
+                ws.get("slug") == slug
+                or str(ws.get("name", "")).lower() == name.lower()
+            ):
+                return ws
         return self.create_workspace(name)
 
     def upload_document(self, file_path: Path) -> dict[str, Any]:

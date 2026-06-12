@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+from botstash.classifier.auto import is_unit_outline
 from botstash.extractors import extract_file
+from botstash.extractors.unit_outline import extract_unit_outline
 from botstash.extractors.url_tracker import extract_urls, log_urls
 from botstash.models import ResourceRecord
+
+logger = logging.getLogger(__name__)
 
 # Common IMSCC manifest namespaces
 _MANIFEST_NS = [
@@ -73,7 +78,11 @@ def extract_imscc(
         if not manifest_path.exists():
             return records
 
-        tree = ET.parse(manifest_path)  # noqa: S314
+        try:
+            tree = ET.parse(manifest_path)  # noqa: S314
+        except ET.ParseError as e:
+            logger.warning("Invalid imsmanifest.xml in %s (%s)", zip_path, e)
+            return records
         root = tree.getroot()
 
         # Process each resource
@@ -144,12 +153,31 @@ def extract_imscc(
                 continue
 
             # Try standard extractors
-            text = extract_file(file_path)
-            if text:
+            try:
+                extracted = extract_file(file_path)
+            except Exception as e:
+                logger.warning(
+                    "Skipping %s: extraction failed (%s)", href, e
+                )
+                continue
+            if extracted:
+                # Re-extract unit outlines with the structured extractor
+                # while the file still exists in the temp dir
+                suffix = file_path.suffix.lower()
+                if suffix in (".pdf", ".docx") and is_unit_outline(
+                    href, extracted
+                ):
+                    try:
+                        extracted = extract_unit_outline(str(file_path))
+                    except Exception:
+                        logger.debug(
+                            "Structured outline extraction failed for %s",
+                            href,
+                        )
                 records.append(
                     ResourceRecord(
                         source_file=href,
-                        extracted_text=text,
+                        extracted_text=extracted,
                         file_type=file_path.suffix.lower(),
                         title=title,
                     )

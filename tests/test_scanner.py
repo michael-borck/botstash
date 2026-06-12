@@ -146,3 +146,13 @@ def test_scan_non_qti_xml_skipped(tmp_path: Path) -> None:
     )
     records = scan_folder(tmp_path)
     assert records == []
+
+
+def test_scan_skips_corrupt_file(tmp_path: Path) -> None:
+    """A corrupt PDF is skipped instead of aborting the whole scan."""
+    (tmp_path / "broken.pdf").write_text("this is not a pdf")
+    _make_vtt(tmp_path / "lecture.vtt", "Still extracted")
+
+    records = scan_folder(tmp_path)
+    assert len(records) == 1
+    assert "Still extracted" in records[0].extracted_text

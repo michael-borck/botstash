@@ -19,7 +19,7 @@ _KEYWORD_MAP: dict[str, list[str]] = {
     "reading": ["reading", "article", "chapter"],
 }
 
-VALID_TYPES = {
+VALID_TYPES_ORDERED = (
     "lecture",
     "worksheet",
     "assignment",
@@ -30,7 +30,9 @@ VALID_TYPES = {
     "transcript",
     "video_url",
     "misc",
-}
+)
+
+VALID_TYPES = set(VALID_TYPES_ORDERED)
 
 # Signals for unit outline content detection
 _OUTLINE_SIGNALS = [
@@ -52,6 +54,25 @@ def _classify_by_filename(source_file: str) -> str | None:
     return None
 
 
+def _outline_signal_count(snippet: str) -> int:
+    """Count unit-outline structural signals in a text snippet."""
+    return sum(
+        1
+        for pattern in _OUTLINE_SIGNALS
+        if re.search(pattern, snippet, re.IGNORECASE)
+    )
+
+
+def is_unit_outline(source_file: str, text: str) -> bool:
+    """Check whether a document looks like a unit outline.
+
+    Matches on filename keywords or multiple structural content signals.
+    """
+    if _classify_by_filename(source_file) == "unit_outline":
+        return True
+    return _outline_signal_count(text[:2000].lower()) >= 2
+
+
 def _classify_by_content(text: str, file_type: str) -> str | None:
     """Pass 2: inspect content for structural signals."""
     if file_type in (".vtt", "vtt"):
@@ -66,12 +87,7 @@ def _classify_by_content(text: str, file_type: str) -> str | None:
         return "quiz"
 
     # Unit outline: check for multiple structural signals
-    signal_count = sum(
-        1
-        for pattern in _OUTLINE_SIGNALS
-        if re.search(pattern, snippet, re.IGNORECASE)
-    )
-    if signal_count >= 2:
+    if _outline_signal_count(snippet) >= 2:
         return "unit_outline"
 
     return None
@@ -122,9 +138,6 @@ def classify(
     - Pass 2: content inspection (overrides Pass 1 on high-confidence)
     - Fallback: 'misc'
 
-    When a document is classified as unit_outline and is a DOCX/PDF,
-    re-extracts using the structured outline extractor.
-
     Writes extracted text files to output_dir and generates tags.json.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -144,21 +157,8 @@ def classify(
         else:
             doc_type = "misc"
 
-        # Re-extract unit outlines with structured extractor
-        extracted_text = record.extracted_text
-        if doc_type == "unit_outline" and record.file_type in (
-            ".docx", ".pdf"
-        ):
-            try:
-                from botstash.extractors.unit_outline import (
-                    extract_unit_outline,
-                )
-
-                extracted_text = extract_unit_outline(record.source_file)
-            except Exception:
-                pass  # Fall back to raw text
-
         # Write extracted text to file (collision-safe)
+        extracted_text = record.extracted_text
         safe_name = _safe_filename(record.source_file, used_names)
         text_path = output_dir / safe_name
         text_path.write_text(extracted_text)

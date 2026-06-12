@@ -43,3 +43,36 @@ def test_extract_flow(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "Review Extracted Content" in response.text
+
+
+def test_extract_unchecked_recursive_disables_recursion(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    """Omitting the recursive checkbox actually turns recursion off."""
+    import botstash.webui.app as webui_app
+
+    seen_kwargs: dict = {}
+
+    def fake_run_extract(source, staging, **kwargs):  # type: ignore[no-untyped-def]
+        seen_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        webui_app, "run_extract", fake_run_extract
+    )
+
+    app = create_app()
+    client = TestClient(app)
+
+    content_zip = tmp_path / "content.zip"
+    with zipfile.ZipFile(content_zip, "w") as zf:
+        zf.writestr("a.txt", "hello")
+
+    with open(content_zip, "rb") as f:
+        response = client.post(
+            "/extract",
+            files={"content_zip": ("content.zip", f, "application/zip")},
+        )
+
+    assert response.status_code == 200
+    assert seen_kwargs["recursive"] is False

@@ -166,7 +166,8 @@ def init() -> None:
         f"INCLUDE_ANSWERS={'true' if answers else 'false'}\n"
         f"RECURSIVE={'true' if recursive else 'false'}\n"
     )
-    click.echo(f"Written to {env_path}")
+    env_path.chmod(0o600)
+    click.echo(f"Written to {env_path} (owner read/write only)")
 
 
 @cli.command()
@@ -174,15 +175,10 @@ def init() -> None:
 @click.option("--port", default=8000, help="Port to bind to.")
 def serve(host: str, port: int) -> None:
     """Launch the BotStash WebUI."""
-    try:
-        import uvicorn
+    import uvicorn
 
-        from botstash.webui.app import create_app
+    from botstash.webui.app import create_app
 
-        app = create_app()
-        click.echo(f"BotStash WebUI: http://{host}:{port}")
-        uvicorn.run(app, host=host, port=port)
-    except ImportError as e:
-        raise click.ClickException(
-            "WebUI dependencies missing. Install with: pip install botstash[webui]"
-        ) from e
+    app = create_app()
+    click.echo(f"BotStash WebUI: http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port)

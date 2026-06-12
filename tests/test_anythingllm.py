@@ -163,3 +163,24 @@ def test_context_manager() -> None:
     with _make_client(handler) as client:
         result = client.list_workspaces()
         assert result == []
+
+
+def test_get_or_create_matches_existing_by_name() -> None:
+    """Existing workspace is found by name even when slugs differ."""
+    created = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return _mock_response({
+                "workspaces": [
+                    {"slug": "isys2001-intro-7x", "name": "ISYS2001 Intro"}
+                ]
+            })
+        created["n"] += 1
+        return _mock_response({"workspace": {"slug": "duplicate"}})
+
+    client = _make_client(handler)
+    ws = client.get_or_create_workspace("ISYS2001 INTRO")
+    assert ws["slug"] == "isys2001-intro-7x"
+    assert created["n"] == 0  # no duplicate workspace created
+    client.close()
