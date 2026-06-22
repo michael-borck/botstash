@@ -13,14 +13,46 @@ def _make_vtt(path: Path, text: str) -> None:
 
 
 def test_scan_mixed_files(tmp_path: Path) -> None:
-    """Scans a folder with VTT and other files."""
+    """Scans a folder with a VTT and an unsupported (.csv) file."""
     _make_vtt(tmp_path / "lecture.vtt", "Hello from lecture")
-    (tmp_path / "notes.txt").write_text("Not extractable")
+    (tmp_path / "data.csv").write_text("a,b,c")  # unsupported
 
     records = scan_folder(tmp_path)
     assert len(records) == 1
     assert records[0].file_type == ".vtt"
     assert "Hello from lecture" in records[0].extracted_text
+
+
+def test_scan_text_formats(tmp_path: Path) -> None:
+    """Plain-text, Markdown, Quarto and HTML files are extracted."""
+    (tmp_path / "notes.txt").write_text("Plain note body")
+    (tmp_path / "guide.md").write_text(
+        "---\ntitle: Guide\n---\n\n# Heading\n\nMarkdown body"
+    )
+    (tmp_path / "slides.qmd").write_text(
+        "---\ntitle: Slides\n---\n\nQuarto body"
+    )
+    (tmp_path / "page.html").write_text(
+        "<html><head><title>T</title><style>.x{color:red}</style></head>"
+        "<body><h1>Header</h1><p>HTML body</p><script>var x=1;</script>"
+        "</body></html>"
+    )
+
+    records = scan_folder(tmp_path)
+    by_type = {r.file_type: r.extracted_text for r in records}
+
+    assert set(by_type) == {".txt", ".md", ".qmd", ".html"}
+    assert "Plain note body" in by_type[".txt"]
+    # YAML front matter stripped from .md / .qmd
+    assert "Markdown body" in by_type[".md"]
+    assert "title: Guide" not in by_type[".md"]
+    assert "Quarto body" in by_type[".qmd"]
+    # HTML tags, script and style content stripped; text retained
+    assert "HTML body" in by_type[".html"]
+    assert "Header" in by_type[".html"]
+    assert "<p>" not in by_type[".html"]
+    assert "var x=1" not in by_type[".html"]
+    assert "color:red" not in by_type[".html"]
 
 
 def test_scan_recursive(tmp_path: Path) -> None:

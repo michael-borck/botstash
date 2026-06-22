@@ -9,6 +9,7 @@ from botstash.extractors import extract_file
 from botstash.extractors.docx import extract_docx
 from botstash.extractors.pptx import extract_pptx
 from botstash.extractors.qti import extract_qti
+from botstash.extractors.text import extract_html, extract_text
 from botstash.extractors.unit_outline import extract_unit_outline
 from botstash.extractors.url_tracker import extract_urls, log_urls
 from botstash.extractors.vtt import extract_vtt
@@ -215,8 +216,42 @@ def test_extract_file_dispatcher(tmp_path: Path) -> None:
 
 def test_extract_file_unknown_extension(tmp_path: Path) -> None:
     """Registry returns None for unknown file types."""
-    txt_file = tmp_path / "readme.txt"
-    txt_file.write_text("hello")
+    csv_file = tmp_path / "data.csv"
+    csv_file.write_text("a,b,c")
 
-    result = extract_file(txt_file)
+    result = extract_file(csv_file)
     assert result is None
+
+
+def test_extract_text_plain(tmp_path: Path) -> None:
+    """Plain-text extraction returns the file contents verbatim."""
+    txt = tmp_path / "note.txt"
+    txt.write_text("  Hello plain text  \n")
+    assert extract_text(txt) == "Hello plain text"
+
+
+def test_extract_text_strips_front_matter(tmp_path: Path) -> None:
+    """Markdown/Quarto extraction strips a leading YAML front-matter block."""
+    md = tmp_path / "doc.md"
+    md.write_text("---\ntitle: My Doc\nauthor: A\n---\n\n# Body\n\nReal content")
+    result = extract_text(md)
+    assert "title: My Doc" not in result
+    assert "# Body" in result
+    assert "Real content" in result
+
+
+def test_extract_html_strips_tags(tmp_path: Path) -> None:
+    """HTML extraction returns readable text without tags, script or style."""
+    html_file = tmp_path / "page.html"
+    html_file.write_text(
+        "<html><head><title>Title</title>"
+        "<style>.a{color:red}</style></head>"
+        "<body><h1>Heading</h1><p>First &amp; second.</p>"
+        "<script>alert('x');</script></body></html>"
+    )
+    result = extract_html(html_file)
+    assert "Heading" in result
+    assert "First & second." in result  # entity decoded
+    assert "<" not in result
+    assert "color:red" not in result
+    assert "alert(" not in result

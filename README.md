@@ -1,11 +1,11 @@
 # BotStash
 
-A CLI tool and lightweight WebUI that extracts course content (PDFs, DOCX, PPTX, VTT transcripts, IMSCC exports), classifies it, and uploads to an [AnythingLLM](https://anythingllm.com/) workspace for embedded chatbots.
+A CLI tool and lightweight WebUI that extracts course content (PDFs, DOCX, PPTX, VTT transcripts, IMSCC exports, plus Markdown/Quarto, HTML and plain text), classifies it, and uploads to an [AnythingLLM](https://anythingllm.com/) workspace for embedded chatbots.
 
 ## Features
 
 - **Folder-first scanning** — point at a folder, BotStash figures out the rest
-- **Multi-format extraction** — PPTX, DOCX, PDF, VTT, QTI quizzes, IMSCC exports
+- **Multi-format extraction** — PPTX, DOCX, PDF, VTT, QTI quizzes, IMSCC exports, Markdown/Quarto (`.md`/`.qmd`), HTML (`.html`/`.htm`), plain text (`.txt`)
 - **Recursive ZIP handling** — nested ZIPs and IMSCC archives are auto-detected
 - **Structured unit outline parsing** — extracts assessments, schedules, learning outcomes with Bloom's taxonomy
 - **Auto-classification** — heuristic tagging of content types (lecture, worksheet, assignment, etc.)

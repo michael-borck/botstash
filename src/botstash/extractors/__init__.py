@@ -9,6 +9,7 @@ from botstash.extractors.docx import extract_docx
 from botstash.extractors.pdf import extract_pdf
 from botstash.extractors.pptx import extract_pptx
 from botstash.extractors.qti import extract_qti
+from botstash.extractors.text import extract_html, extract_text
 from botstash.extractors.vtt import extract_vtt
 
 EXTRACTOR_REGISTRY: dict[str, Callable[[Path], str]] = {
@@ -17,6 +18,11 @@ EXTRACTOR_REGISTRY: dict[str, Callable[[Path], str]] = {
     ".pdf": extract_pdf,
     ".pptx": extract_pptx,
     ".xml": extract_qti,
+    ".txt": extract_text,
+    ".md": extract_text,
+    ".qmd": extract_text,
+    ".html": extract_html,
+    ".htm": extract_html,
 }
 
 

@@ -32,7 +32,8 @@ def scan_folder(
     """Recursively scan a folder for extractable content.
 
     Handles:
-    - .pdf, .docx, .pptx, .vtt: extract via extractor registry
+    - .pdf, .docx, .pptx, .vtt, .txt, .md, .qmd, .html, .htm: extract via
+      extractor registry
     - .xml: try QTI extraction, skip if not QTI
     - .zip, .imscc: check for imsmanifest.xml (use IMSCC parser),
       otherwise unzip and recurse
@@ -96,7 +97,10 @@ def scan_folder(
                 pass
 
         # Standard extractable files
-        elif suffix in (".pdf", ".docx", ".pptx", ".vtt"):
+        elif suffix in (
+            ".pdf", ".docx", ".pptx", ".vtt",
+            ".txt", ".md", ".qmd", ".html", ".htm",
+        ):
             try:
                 extracted = extract_file(file_path)
             except Exception as e:
