@@ -22,6 +22,9 @@ def cli() -> None:
 @click.option("--url", envvar="ANYTHINGLLM_URL", help="AnythingLLM instance URL.")
 @click.option("--key", envvar="ANYTHINGLLM_KEY", help="AnythingLLM API key.")
 @click.option("--keep-staging", is_flag=True, help="Keep staging files after embed.")
+@click.option("--reset", is_flag=True,
+              help="Clear the workspace before uploading (no duplicate "
+                   "documents on re-run).")
 @click.option("--include-answers/--no-include-answers", default=None,
               help="Include quiz answer choices.")
 @click.option("--recursive/--no-recursive", default=None,
@@ -32,6 +35,7 @@ def run(
     url: str | None,
     key: str | None,
     keep_staging: bool,
+    reset: bool,
     include_answers: bool | None,
     recursive: bool | None,
 ) -> None:
@@ -50,7 +54,8 @@ def run(
     )
     try:
         slug = run_full(
-            Path(source), workspace, config, keep_staging=keep_staging
+            Path(source), workspace, config,
+            keep_staging=keep_staging, reset=reset,
         )
         click.echo(f"Done! Workspace '{slug}' is ready.")
         click.echo(

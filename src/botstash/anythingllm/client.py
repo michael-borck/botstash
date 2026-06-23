@@ -100,12 +100,33 @@ class AnythingLLMClient:
             json={"adds": doc_locations},
         )
 
+    def get_workspace_documents(self, slug: str) -> list[dict[str, Any]]:
+        """Return the documents currently embedded in a workspace.
+
+        Uses the single-workspace endpoint, which (unlike the list endpoint)
+        populates the ``documents`` array.
+        """
+        data = self._request("GET", f"/api/v1/workspace/{slug}")
+        ws = data.get("workspace")
+        if isinstance(ws, list):
+            ws = ws[0] if ws else {}
+        return (ws or {}).get("documents", [])  # type: ignore[no-any-return]
+
     def reset_workspace(self, slug: str) -> dict[str, Any]:
-        """Remove all documents from a workspace."""
+        """Remove all documents from a workspace.
+
+        AnythingLLM ignores a wildcard ("*") delete, so enumerate the
+        workspace's actual document paths and delete those explicitly.
+        Without this, re-uploading the same files duplicates every document.
+        """
+        docs = self.get_workspace_documents(slug)
+        paths = [d["docpath"] for d in docs if d.get("docpath")]
+        if not paths:
+            return {"success": True}
         return self._request(
             "POST",
             f"/api/v1/workspace/{slug}/update-embeddings",
-            json={"adds": [], "deletes": ["*"]},
+            json={"adds": [], "deletes": paths},
         )
 
     def get_embed_config(self, slug: str) -> dict[str, Any] | None:

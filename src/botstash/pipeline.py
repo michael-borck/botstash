@@ -268,8 +268,12 @@ def run_full(
     workspace: str,
     config: BotStashConfig,
     keep_staging: bool = False,
+    reset: bool = False,
 ) -> str:
     """Run the complete extract-classify-embed pipeline.
+
+    When ``reset`` is True the workspace's existing documents are cleared
+    before uploading, so re-runs update in place instead of duplicating.
 
     Returns the workspace slug.
     """
@@ -280,7 +284,7 @@ def run_full(
         recursive=config.recursive,
         include_answers=config.include_answers,
     )
-    slug = run_embed(output_dir, workspace, config)
+    slug = run_embed(output_dir, workspace, config, reset=reset)
 
     if not keep_staging:
         for f in output_dir.iterdir():

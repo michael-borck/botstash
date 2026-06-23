@@ -135,14 +135,37 @@ def test_move_to_workspace() -> None:
 
 
 def test_reset_workspace() -> None:
+    """Reset deletes the workspace's actual docpaths, not a '*' wildcard."""
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return _mock_response({"workspace": [{
+                "slug": "isys2001",
+                "documents": [
+                    {"docpath": "custom-documents/a.json"},
+                    {"docpath": "custom-documents/b.json"},
+                ],
+            }]})
         body = json.loads(request.content)
-        assert body["deletes"] == ["*"]
+        assert body["adds"] == []
+        assert body["deletes"] == [
+            "custom-documents/a.json", "custom-documents/b.json"
+        ]
         return _mock_response({"workspace": {"slug": "isys2001"}})
 
     client = _make_client(handler)
+    client.reset_workspace("isys2001")
+    client.close()
+
+
+def test_reset_workspace_empty() -> None:
+    """An empty workspace issues no delete request."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"  # no POST delete should be made
+        return _mock_response({"workspace": [{"documents": []}]})
+
+    client = _make_client(handler)
     result = client.reset_workspace("isys2001")
-    assert "workspace" in result
+    assert result == {"success": True}
     client.close()
 
 

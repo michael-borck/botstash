@@ -24,6 +24,9 @@ pip install botstash
 # Full pipeline — point at a folder
 botstash run ./course-materials/ --workspace ISYS2001
 
+# Update an existing workspace cleanly (clears old docs first — no duplicates)
+botstash run ./course-materials/ --workspace ISYS2001 --reset
+
 # Two-step workflow (extract, review, embed)
 botstash extract ./course-materials/ --output ./staging/
 # ... review staging/tags.json ...
