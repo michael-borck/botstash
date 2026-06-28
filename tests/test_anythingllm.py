@@ -229,32 +229,21 @@ def test_set_system_prompt() -> None:
     assert result["workspace"]["slug"] == "slug"
 
 
-def test_create_embed_primary() -> None:
+def test_create_embed() -> None:
+    captured: dict[str, bytes] = {}
+
     def handler(request: httpx.Request) -> httpx.Response:
         if (
             request.method == "POST"
-            and request.url.path == "/api/v1/workspace/slug/embed/new"
+            and request.url.path == "/api/v1/embed/new"
         ):
+            captured["body"] = request.read()
             return _mock_response({"embed": {"uuid": "abc-123"}})
         return _mock_response({}, status=404)
 
     client = _make_client(handler)
-    embed = client.create_embed("slug", ["example.org"])
+    embed = client.create_embed("alice", ["example.org"])
     client.close()
+    assert b"workspace_slug" in captured["body"]
+    assert b"alice" in captured["body"]
     assert embed["uuid"] == "abc-123"
-
-
-def test_create_embed_fallback() -> None:
-    calls: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request.url.path)
-        if request.url.path == "/api/v1/embed/new":
-            return _mock_response({"embed": {"uuid": "fb-000"}})
-        return _mock_response({})
-
-    client = _make_client(handler)
-    embed = client.create_embed("slug")
-    client.close()
-    assert embed["uuid"] == "fb-000"
-    assert "/api/v1/embed/new" in calls

@@ -101,7 +101,7 @@ def test_provision_persona(tmp_path: Path) -> None:
             return httpx.Response(200, json={"workspace": {"id": 1}})
         if (
             request.method == "POST"
-            and path == "/api/v1/workspace/alice/embed/new"
+            and path == "/api/v1/embed/new"
         ):
             return httpx.Response(200, json={"embed": {"uuid": "NEW-UUID"}})
         return httpx.Response(404, json={})
@@ -121,4 +121,4 @@ def test_provision_persona(tmp_path: Path) -> None:
     assert embed_uuid == "NEW-UUID"
     assert 'data-embed-id="NEW-UUID"' in page.read_text()
     assert "/api/v1/workspace/alice/update" in calls
-    assert "/api/v1/workspace/alice/embed/new" in calls
+    assert "/api/v1/embed/new" in calls

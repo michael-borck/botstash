@@ -154,18 +154,8 @@ class AnythingLLMClient:
         chat_mode: str = "query",
     ) -> dict[str, Any]:
         """Create an embed widget for a workspace. Returns the embed object."""
-        body: dict[str, Any] = {"chat_mode": chat_mode}
+        body: dict[str, Any] = {"workspace_slug": slug, "chat_mode": chat_mode}
         if allowlist_domains:
             body["allowlist_domains"] = allowlist_domains
-        data = self._request(
-            "POST", f"/api/v1/workspace/{slug}/embed/new", json=body
-        )
-        embed = data.get("embed")
-        if not embed:
-            data = self._request(
-                "POST",
-                "/api/v1/embed/new",
-                json={**body, "workspaceSlug": slug},
-            )
-            embed = data.get("embed", {})
-        return embed  # type: ignore[no-any-return]
+        data = self._request("POST", "/api/v1/embed/new", json=body)
+        return data.get("embed", {})  # type: ignore[no-any-return]
