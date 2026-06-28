@@ -42,6 +42,32 @@ botstash extract ./folder/ --no-recursive
 botstash serve
 ```
 
+## Provisioning persona chatbots
+
+BotStash can also provision multiple **in-character persona bots** (a simulated organisation's staff, for example) from a manifest. Each persona gets its own workspace, a system-prompt identity, a personal backstory plus any shared documents, and an embed widget whose id is written back into the persona's page file.
+
+```bash
+# personas.json lists personas (slug, prompt, backstory, page), shared docs, allowlist_domains
+botstash persona personas.json --url http://localhost:3001 --key $ANYTHINGLLM_KEY
+
+# Re-run cleanly (--reset clears each workspace's documents first)
+botstash persona personas.json --reset
+```
+
+Manifest schema (paths resolve relative to the manifest file):
+
+```json
+{
+  "shared_docs": ["company_overview.md"],
+  "allowlist_domains": ["example.org"],
+  "personas": [
+    {"slug": "priya_nair", "prompt": "bots/priya_nair/prompt.txt",
+     "backstory": "_backstories/priya_nair_cfo.md",
+     "page": "bots/priya_nair/index.qmd"}
+  ]
+}
+```
+
 ## Configuration
 
 Settings are resolved in priority order: CLI flag > environment variable > `.botstash.env` file.
