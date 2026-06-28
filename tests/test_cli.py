@@ -4,6 +4,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from botstash import __version__
 from botstash.cli import cli
 
 
@@ -12,7 +13,7 @@ def test_version() -> None:
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert "botstash" in result.output
-    assert "0.5.0" in result.output
+    assert __version__ in result.output
 
 
 def test_extract_command(tmp_path: Path) -> None:
