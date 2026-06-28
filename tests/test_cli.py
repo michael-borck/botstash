@@ -12,7 +12,7 @@ def test_version() -> None:
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
     assert "botstash" in result.output
-    assert "0.4.0" in result.output
+    assert "0.5.0" in result.output
 
 
 def test_extract_command(tmp_path: Path) -> None:
