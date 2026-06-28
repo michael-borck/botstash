@@ -138,3 +138,34 @@ class AnythingLLMClient:
             return data
         except AnythingLLMError:
             return None
+
+    def set_system_prompt(self, slug: str, prompt: str) -> dict[str, Any]:
+        """Set a workspace's system prompt (AnythingLLM openAiPrompt)."""
+        return self._request(
+            "POST",
+            f"/api/v1/workspace/{slug}/update",
+            json={"openAiPrompt": prompt},
+        )
+
+    def create_embed(
+        self,
+        slug: str,
+        allowlist_domains: list[str] | None = None,
+        chat_mode: str = "query",
+    ) -> dict[str, Any]:
+        """Create an embed widget for a workspace. Returns the embed object."""
+        body: dict[str, Any] = {"chat_mode": chat_mode}
+        if allowlist_domains:
+            body["allowlist_domains"] = allowlist_domains
+        data = self._request(
+            "POST", f"/api/v1/workspace/{slug}/embed/new", json=body
+        )
+        embed = data.get("embed")
+        if not embed:
+            data = self._request(
+                "POST",
+                "/api/v1/embed/new",
+                json={**body, "workspaceSlug": slug},
+            )
+            embed = data.get("embed", {})
+        return embed  # type: ignore[no-any-return]

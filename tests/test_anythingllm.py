@@ -207,3 +207,54 @@ def test_get_or_create_matches_existing_by_name() -> None:
     assert ws["slug"] == "isys2001-intro-7x"
     assert created["n"] == 0  # no duplicate workspace created
     client.close()
+
+
+def test_set_system_prompt() -> None:
+    captured: dict[str, bytes] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (
+            request.method == "POST"
+            and request.url.path == "/api/v1/workspace/slug/update"
+        ):
+            captured["body"] = request.read()
+            return _mock_response({"workspace": {"slug": "slug"}})
+        return _mock_response({}, status=404)
+
+    client = _make_client(handler)
+    result = client.set_system_prompt("slug", "be the persona")
+    client.close()
+    assert b"openAiPrompt" in captured["body"]
+    assert b"be the persona" in captured["body"]
+    assert result["workspace"]["slug"] == "slug"
+
+
+def test_create_embed_primary() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if (
+            request.method == "POST"
+            and request.url.path == "/api/v1/workspace/slug/embed/new"
+        ):
+            return _mock_response({"embed": {"uuid": "abc-123"}})
+        return _mock_response({}, status=404)
+
+    client = _make_client(handler)
+    embed = client.create_embed("slug", ["example.org"])
+    client.close()
+    assert embed["uuid"] == "abc-123"
+
+
+def test_create_embed_fallback() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        if request.url.path == "/api/v1/embed/new":
+            return _mock_response({"embed": {"uuid": "fb-000"}})
+        return _mock_response({})
+
+    client = _make_client(handler)
+    embed = client.create_embed("slug")
+    client.close()
+    assert embed["uuid"] == "fb-000"
+    assert "/api/v1/embed/new" in calls

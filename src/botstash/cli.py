@@ -187,3 +187,36 @@ def serve(host: str, port: int) -> None:
     app = create_app()
     click.echo(f"BotStash WebUI: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port)
+
+@cli.command()
+@click.argument("manifest", type=click.Path(exists=True))
+@click.option("--reset", is_flag=True, help="Clear docs before uploading.")
+@click.option(
+    "--url", envvar="ANYTHINGLLM_URL", help="AnythingLLM instance URL."
+)
+@click.option(
+    "--key", envvar="ANYTHINGLLM_KEY", help="AnythingLLM API key."
+)
+def persona(
+    manifest: str,
+    reset: bool,
+    url: str | None,
+    key: str | None,
+) -> None:
+    """Provision in-character persona chatbots from a manifest JSON.
+
+    MANIFEST lists personas (slug, prompt, backstory, page), shared
+    documents, and allowed domains. Each persona gets its own workspace, a
+    system-prompt identity, a personal backstory plus shared documents, and
+    an embed widget whose id is written back into the persona's page file.
+    """
+    from botstash.personas import load_manifest, provision_personas
+
+    config = load_config(url_override=url, key_override=key)
+    spec = load_manifest(Path(manifest))
+    try:
+        embeds = provision_personas(spec, config, reset=reset)
+    except Exception as e:
+        raise click.ClickException(str(e)) from e
+    for slug, embed_uuid in embeds.items():
+        click.echo(f"  {slug}: {embed_uuid or '(no embed)'}")
