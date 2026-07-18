@@ -32,6 +32,9 @@ botstash extract ./course-materials/ --output ./staging/
 # ... review staging/tags.json ...
 botstash embed ./staging/ --workspace ISYS2001
 
+# Get the embeddable chatbot code for a workspace
+botstash chatbot ISYS2001
+
 # Include quiz answer choices
 botstash extract ./folder/ --include-answers
 
@@ -41,6 +44,20 @@ botstash extract ./folder/ --no-recursive
 # Launch WebUI
 botstash serve
 ```
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `run` | Full extract → classify → embed pipeline in one step |
+| `extract` | Extract and auto-classify a folder into a staging directory |
+| `embed` | Upload a staging directory into an AnythingLLM workspace |
+| `chatbot` | Retrieve the embeddable chatbot code for a workspace |
+| `persona` | Provision in-character persona chatbots from a manifest |
+| `init` | Scaffold a `.botstash.env` config file (`--global` for `~/.botstash.env`) |
+| `serve` | Launch the FastAPI WebUI |
+
+Run `botstash <command> --help` for the full option list.
 
 ## Provisioning persona chatbots
 
@@ -70,14 +87,24 @@ Manifest schema (paths resolve relative to the manifest file):
 
 ## Configuration
 
-Settings are resolved in priority order: CLI flag > environment variable > `.botstash.env` file.
+Settings are resolved in priority order:
 
-```bash
-# Scaffold a config file
-botstash init
+```
+CLI flag  >  environment variable  >  local .botstash.env  >  global ~/.botstash.env
 ```
 
-`.botstash.env`:
+A global `~/.botstash.env` in your home directory provides defaults for every
+project; a local `.botstash.env` in the current directory overrides it per key.
+
+```bash
+# Scaffold a local config file in the current directory
+botstash init
+
+# Scaffold a global config file at ~/.botstash.env (defaults for every project)
+botstash init --global
+```
+
+`.botstash.env` (local or global — same format):
 ```
 ANYTHINGLLM_URL=http://localhost:3001
 ANYTHINGLLM_KEY=your-api-key

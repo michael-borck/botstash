@@ -81,3 +81,20 @@ def test_init_command(tmp_path: Path) -> None:
         assert "ANYTHINGLLM_KEY=my-api-key" in content
         assert "INCLUDE_ANSWERS=false" in content
         assert "RECURSIVE=true" in content
+
+
+def test_init_global(tmp_path: Path, monkeypatch: object) -> None:
+    """Init --global scaffolds ~/.botstash.env, not a local file."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))  # type: ignore[attr-defined]
+    runner = CliRunner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            cli, ["init", "--global"],
+            input="http://localhost:3001\nmy-api-key\nn\ny\n",
+        )
+        assert result.exit_code == 0
+        assert (home / ".botstash.env").exists()
+        assert not Path(".botstash.env").exists()

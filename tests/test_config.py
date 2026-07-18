@@ -2,7 +2,20 @@
 
 from pathlib import Path
 
+import pytest
+
 from botstash.config import _parse_bool, load_config
+
+
+@pytest.fixture(autouse=True)
+def _isolate_home(tmp_path: Path, monkeypatch: object) -> None:
+    """Point Path.home() at an empty dir so a real ~/.botstash.env is ignored.
+
+    Each test that needs a global file writes it under this directory.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))  # type: ignore[attr-defined]
 
 
 def _clean_env(monkeypatch: object) -> None:
@@ -100,6 +113,51 @@ def test_boolean_cli_overrides_all(tmp_path: Path, monkeypatch: object) -> None:
 
     config = load_config(include_answers_override=False)
     assert config.include_answers is False
+
+
+def test_load_from_global_home_file(tmp_path: Path, monkeypatch: object) -> None:
+    """Config loads from ~/.botstash.env when no local file exists."""
+    (Path.home() / ".botstash.env").write_text(
+        "ANYTHINGLLM_URL=https://global.example.com\n"
+        "ANYTHINGLLM_KEY=globalkey\n"
+    )
+    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+    _clean_env(monkeypatch)
+
+    config = load_config()
+    assert config.url == "https://global.example.com"
+    assert config.key == "globalkey"
+
+
+def test_local_file_overrides_global(tmp_path: Path, monkeypatch: object) -> None:
+    """Local .botstash.env overrides the global home file per key."""
+    (Path.home() / ".botstash.env").write_text(
+        "ANYTHINGLLM_URL=https://global.example.com\n"
+        "ANYTHINGLLM_KEY=globalkey\n"
+    )
+    (tmp_path / ".botstash.env").write_text(
+        "ANYTHINGLLM_URL=https://local.example.com\n"
+    )
+    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+    _clean_env(monkeypatch)
+
+    config = load_config()
+    # Local overrides url; key falls through to the global file.
+    assert config.url == "https://local.example.com"
+    assert config.key == "globalkey"
+
+
+def test_env_var_overrides_global(tmp_path: Path, monkeypatch: object) -> None:
+    """Environment variables take priority over the global file."""
+    (Path.home() / ".botstash.env").write_text(
+        "ANYTHINGLLM_URL=https://global.example.com\n"
+    )
+    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+    _clean_env(monkeypatch)
+    monkeypatch.setenv("ANYTHINGLLM_URL", "https://envvar.example.com")  # type: ignore[attr-defined]
+
+    config = load_config()
+    assert config.url == "https://envvar.example.com"
 
 
 def test_parse_bool_values() -> None:

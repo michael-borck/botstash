@@ -158,7 +158,8 @@ def provision_personas(
     if not config.url or not config.key:
         msg = (
             "AnythingLLM URL and API key are required. "
-            "Set via .botstash.env, environment variables, or CLI flags."
+            "Set via .botstash.env (local or ~/.botstash.env), "
+            "environment variables, or CLI flags."
         )
         raise ValueError(msg)
 

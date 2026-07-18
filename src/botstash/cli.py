@@ -153,11 +153,19 @@ def chatbot(workspace: str, url: str | None, key: str | None) -> None:
 
 
 @cli.command()
-def init() -> None:
-    """Scaffold a .botstash.env configuration file."""
-    env_path = Path(".botstash.env")
+@click.option("--global", "global_", is_flag=True,
+              help="Write to ~/.botstash.env (defaults for every project) "
+                   "instead of the current directory.")
+def init(global_: bool) -> None:
+    """Scaffold a .botstash.env configuration file.
+
+    By default this writes a local .botstash.env in the current directory.
+    Use --global to write ~/.botstash.env, which provides defaults for every
+    project (a local file overrides it per key).
+    """
+    env_path = Path.home() / ".botstash.env" if global_ else Path(".botstash.env")
     if env_path.exists():  # noqa: SIM102
-        if not click.confirm(".botstash.env exists. Overwrite?"):
+        if not click.confirm(f"{env_path} exists. Overwrite?"):
             return
 
     url = click.prompt("AnythingLLM URL", default="http://localhost:3001")
